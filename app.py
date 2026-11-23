@@ -138,7 +138,7 @@ orange_cap = (
     .head(1)
 )
 
-st.dataframe(orange_cap, use_container_width=True)
+st.dataframe(orange_cap,width="stretch" )
 
 # Purple Cap
 st.header("7. Purple Cap Analysis")
