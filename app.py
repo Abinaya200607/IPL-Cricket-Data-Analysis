@@ -1,22 +1,34 @@
+
 import streamlit as st
 import pandas as pd
 
+# Page Configuration
 st.set_page_config(
     page_title="IPL Data Analysis Dashboard",
+    page_icon="🏏",
     layout="wide"
 )
 
-st.title("IPL Cricket Data Analysis Dashboard")
+# Title
+st.title("🏏 IPL Cricket Data Analysis Dashboard")
+st.caption("Explore IPL statistics, player performance and team records")
 
-st.write("Welcome to IPL Data Analysis Project!")
+st.divider()
 
-# Load datasets
+# Load Datasets
 matches = pd.read_csv("matches.csv")
 deliveries = pd.read_csv("deliveries.csv")
 
-st.success("IPL Datasets Loaded Successfully!")
+# Convert numeric columns safely
+deliveries["runs_off_bat"] = pd.to_numeric(
+    deliveries["runs_off_bat"], errors="coerce"
+).fillna(0)
 
-# Dashboard statistics
+deliveries["extras"] = pd.to_numeric(
+    deliveries["extras"], errors="coerce"
+).fillna(0)
+
+# Dashboard Statistics
 total_matches = matches["match_id"].nunique()
 
 total_runs = (
@@ -25,16 +37,22 @@ total_runs = (
 )
 
 total_teams = deliveries["batting_team"].nunique()
-
 total_players = deliveries["striker"].nunique()
+
+# Metric Cards
+st.subheader("📊 IPL Overview")
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Total Matches", total_matches)
-col2.metric("Total Runs", total_runs)
+col1.metric("Total Matches", f"{total_matches:,}")
+col2.metric("Total Runs", f"{total_runs:,}")
 col3.metric("Total Teams", total_teams)
 col4.metric("Total Batters", total_players)
-st.subheader("Top 10 Run Scorers")
+
+st.divider()
+
+# Top Run Scorers
+st.subheader("🏆 Top 10 Run Scorers")
 
 top_scorers = (
     deliveries.groupby("striker")["runs_off_bat"]
@@ -44,7 +62,11 @@ top_scorers = (
 )
 
 st.bar_chart(top_scorers)
-st.subheader("Top 10 Wicket Takers")
+
+st.divider()
+
+# Top Wicket Takers
+st.subheader("🎯 Top 10 Wicket Takers")
 
 wicket_data = deliveries[
     deliveries["wicket_type"].notna()
@@ -64,20 +86,16 @@ top_wickets = (
 )
 
 st.bar_chart(top_wickets)
-st.subheader("Season-wise Total Runs")
-deliveries["season"] = deliveries["season"].astype(str)
 
-deliveries["total_runs"] = (
-    pd.to_numeric(deliveries["runs_off_bat"], errors="coerce").fillna(0)
-    + pd.to_numeric(deliveries["extras"], errors="coerce").fillna(0)
-)
-st.subheader("Season-wise Total Runs")
+st.divider()
+
+# Season-wise Total Runs
+st.subheader("📈 Season-wise Total Runs")
 
 deliveries["season"] = deliveries["season"].astype(str)
 
 deliveries["total_runs"] = (
-    pd.to_numeric(deliveries["runs_off_bat"], errors="coerce").fillna(0)
-    + pd.to_numeric(deliveries["extras"], errors="coerce").fillna(0)
+    deliveries["runs_off_bat"] + deliveries["extras"]
 )
 
 season_runs = (
@@ -88,35 +106,41 @@ season_runs = (
 
 st.line_chart(season_runs)
 
+st.divider()
 
-st.subheader("Team-wise Match Wins")
+# Team-wise Match Wins
+st.subheader("🏅 Team-wise Match Wins")
 
-team_wins = matches.groupby("winner")["match_id"].count()
-
-team_wins = team_wins.sort_values(ascending=False).head(10)
+team_wins = (
+    matches.groupby("winner")["match_id"]
+    .count()
+    .sort_values(ascending=False)
+    .head(10)
+)
 
 st.bar_chart(team_wins)
 
+st.divider()
 
-st.subheader("Toss Decision Analysis")
+# Toss Decision Analysis
+st.subheader("🪙 Toss Decision Analysis")
 
 toss_data = matches["toss_decision"].value_counts()
 
-st.write("Toss Decision Statistics")
+col1, col2 = st.columns(2)
 
-st.dataframe(toss_data)
+with col1:
+    st.write("Toss Decision Statistics")
+    st.dataframe(toss_data, use_container_width=True)
 
-st.vega_lite_chart(
-    toss_data.reset_index(),
-    {
-        "mark": {"type": "arc", "innerRadius": 0},
-        "encoding": {
-            "theta": {"field": "count", "type": "quantitative"},
-            "color": {"field": "toss_decision", "type": "nominal"}
-        }
-    }
-)
-st.subheader("Top 10 Player of the Match")
+with col2:
+    st.write("Toss Decision Chart")
+    st.bar_chart(toss_data)
+
+st.divider()
+
+# Player of the Match
+st.subheader("⭐ Top 10 Player of the Match")
 
 player_awards = (
     matches["player_of_match"]
@@ -126,3 +150,8 @@ player_awards = (
 )
 
 st.bar_chart(player_awards)
+
+st.divider()
+
+# Footer
+st.caption("IPL Cricket Data Analysis Project | Built using Python, Pandas and Streamlit")
