@@ -1,157 +1,234 @@
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 
-# Page Configuration
 st.set_page_config(
-    page_title="IPL Data Analysis Dashboard",
+    page_title="Advanced IPL Dashboard",
     page_icon="🏏",
     layout="wide"
 )
 
-# Title
-st.title("🏏 IPL Cricket Data Analysis Dashboard")
-st.caption("Explore IPL statistics, player performance and team records")
+st.title("🏏 Advanced IPL Cricket Data Analysis")
+st.caption("Explore IPL matches, teams, players and performance")
 
-st.divider()
+# Load datasets
+@st.cache_data
+def load_data():
+    matches = pd.read_csv("matches.csv")
+    deliveries = pd.read_csv("deliveries.csv")
 
-# Load Datasets
-matches = pd.read_csv("matches.csv")
-deliveries = pd.read_csv("deliveries.csv")
+    matches["season"] = matches["season"].astype(str)
+    deliveries["season"] = deliveries["season"].astype(str)
 
-# Convert numeric columns safely
-deliveries["runs_off_bat"] = pd.to_numeric(
-    deliveries["runs_off_bat"], errors="coerce"
-).fillna(0)
+    for col in ["runs_off_bat", "extras"]:
+        deliveries[col] = pd.to_numeric(
+            deliveries[col], errors="coerce"
+        ).fillna(0)
 
-deliveries["extras"] = pd.to_numeric(
-    deliveries["extras"], errors="coerce"
-).fillna(0)
+    return matches, deliveries
 
-# Dashboard Statistics
-total_matches = matches["match_id"].nunique()
+matches, deliveries = load_data()
 
-total_runs = (
-    deliveries["runs_off_bat"].sum()
-    + deliveries["extras"].sum()
+# Sidebar filters
+st.sidebar.header("Dashboard Filters")
+
+seasons = sorted(deliveries["season"].dropna().unique())
+selected_seasons = st.sidebar.multiselect(
+    "Select Season",
+    seasons,
+    default=seasons
 )
 
-total_teams = deliveries["batting_team"].nunique()
-total_players = deliveries["striker"].nunique()
+teams = sorted(deliveries["batting_team"].dropna().unique())
+selected_teams = st.sidebar.multiselect(
+    "Select Teams",
+    teams,
+    default=teams
+)
 
-# Metric Cards
-st.subheader("📊 IPL Overview")
+players = sorted(deliveries["striker"].dropna().unique())
+selected_players = st.sidebar.multiselect(
+    "Select Players",
+    players
+)
+
+filtered = deliveries[
+    deliveries["season"].isin(selected_seasons)
+    & deliveries["batting_team"].isin(selected_teams)
+].copy()
+
+# Overview
+st.header("1. IPL Overview")
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Total Matches", f"{total_matches:,}")
-col2.metric("Total Runs", f"{total_runs:,}")
-col3.metric("Total Teams", total_teams)
-col4.metric("Total Batters", total_players)
+col1.metric("Total Matches", len(matches))
+col2.metric("Total Runs", int(
+    deliveries["runs_off_bat"].sum() + deliveries["extras"].sum()
+))
+col3.metric("Total Teams", deliveries["batting_team"].nunique())
+col4.metric("Total Players", deliveries["striker"].nunique())
 
 st.divider()
 
 # Top Run Scorers
-st.subheader("🏆 Top 10 Run Scorers")
+st.header("2. Top 10 Run Scorers")
 
-top_scorers = (
-    deliveries.groupby("striker")["runs_off_bat"]
+runs = (
+    filtered.groupby("striker")["runs_off_bat"]
     .sum()
     .sort_values(ascending=False)
     .head(10)
 )
 
-st.bar_chart(top_scorers)
-
-st.divider()
+st.bar_chart(runs)
 
 # Top Wicket Takers
-st.subheader("🎯 Top 10 Wicket Takers")
+st.header("3. Top 10 Wicket Takers")
 
-wicket_data = deliveries[
-    deliveries["wicket_type"].notna()
-    & ~deliveries["wicket_type"].isin([
-        "run out",
-        "retired hurt",
-        "obstructing the field",
-        "retired out"
-    ])
+valid_wickets = filtered[
+    filtered["wicket_type"].notna()
+    & ~filtered["wicket_type"].isin(
+        ["run out", "retired hurt", "obstructing the field"]
+    )
 ]
 
-top_wickets = (
-    wicket_data.groupby("bowler")
-    .size()
-    .sort_values(ascending=False)
-    .head(10)
-)
-
-st.bar_chart(top_wickets)
-
-st.divider()
-
-# Season-wise Total Runs
-st.subheader("📈 Season-wise Total Runs")
-
-deliveries["season"] = deliveries["season"].astype(str)
-
-deliveries["total_runs"] = (
-    deliveries["runs_off_bat"] + deliveries["extras"]
-)
-
-season_runs = (
-    deliveries.groupby("season")["total_runs"]
-    .sum()
-    .sort_index()
-)
-
-st.line_chart(season_runs)
-
-st.divider()
-
-# Team-wise Match Wins
-st.subheader("🏅 Team-wise Match Wins")
-
-team_wins = (
-    matches.groupby("winner")["match_id"]
+wickets = (
+    valid_wickets.groupby("bowler")["wicket_type"]
     .count()
     .sort_values(ascending=False)
     .head(10)
 )
 
-st.bar_chart(team_wins)
+st.bar_chart(wickets)
 
-st.divider()
+# Season-wise Runs
+st.header("4. Season-wise Total Runs")
 
-# Toss Decision Analysis
-st.subheader("🪙 Toss Decision Analysis")
-
-toss_data = matches["toss_decision"].value_counts()
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.write("Toss Decision Statistics")
-    st.dataframe(toss_data, use_container_width=True)
-
-with col2:
-    st.write("Toss Decision Chart")
-    st.bar_chart(toss_data)
-
-st.divider()
-
-# Player of the Match
-st.subheader("⭐ Top 10 Player of the Match")
-
-player_awards = (
-    matches["player_of_match"]
-    .dropna()
-    .value_counts()
-    .head(10)
+season_runs = (
+    filtered.groupby("season")
+    .apply(
+        lambda x: x["runs_off_bat"].sum() + x["extras"].sum(),
+        include_groups=False
+    )
 )
 
-st.bar_chart(player_awards)
+st.line_chart(season_runs)
+
+# Team Wins
+st.header("5. Team-wise Match Wins")
+
+if "winner" in matches.columns:
+    team_wins = (
+        matches[matches["winner"].isin(selected_teams)]
+        ["winner"].value_counts()
+    )
+    st.bar_chart(team_wins)
+
+# Orange Cap
+st.header("6. Orange Cap Analysis")
+
+orange_cap = (
+    filtered.groupby(["season", "striker"])["runs_off_bat"]
+    .sum()
+    .reset_index()
+    .sort_values("runs_off_bat", ascending=False)
+    .groupby("season")
+    .head(1)
+)
+
+st.dataframe(orange_cap, use_container_width=True)
+
+# Purple Cap
+st.header("7. Purple Cap Analysis")
+
+purple_cap = (
+    valid_wickets.groupby(["season", "bowler"])
+    .size()
+    .reset_index(name="wickets")
+    .sort_values("wickets", ascending=False)
+    .groupby("season")
+    .head(1)
+)
+
+st.dataframe(purple_cap, use_container_width=True)
+
+# Batting Strike Rate
+st.header("8. Batting Performance")
+
+batting = (
+    filtered.groupby("striker")
+    .agg(
+        runs=("runs_off_bat", "sum"),
+        balls=("actual_delivery", "count")
+    )
+)
+
+batting["strike_rate"] = np.where(
+    batting["balls"] > 0,
+    batting["runs"] / batting["balls"] * 100,
+    0
+)
+
+st.dataframe(
+    batting.sort_values("runs", ascending=False).head(10),
+    use_container_width=True
+)
+
+# Bowling Economy
+st.header("9. Bowling Performance")
+
+bowling = (
+    filtered.groupby("bowler")
+    .agg(
+        runs_conceded=("runs_off_bat", "sum"),
+        balls=("actual_delivery", "count")
+    )
+)
+
+bowling["economy"] = np.where(
+    bowling["balls"] > 0,
+    bowling["runs_conceded"] * 6 / bowling["balls"],
+    0
+)
+
+st.dataframe(
+    bowling.sort_values("economy").head(10),
+    use_container_width=True
+)
+
+# Venue Analysis
+st.header("10. Venue Analysis")
+
+venue_matches = matches["venue"].value_counts().head(10)
+st.bar_chart(venue_matches)
+
+# Toss Impact
+st.header("11. Toss Impact Analysis")
+
+if "toss_winner" in matches.columns and "winner" in matches.columns:
+    toss_wins = matches[
+        matches["toss_winner"] == matches["winner"]
+    ]
+    st.metric("Matches Won by Toss Winners", len(toss_wins))
+
+# Player Selection
+st.header("12. Player Analysis")
+
+if selected_players:
+    player_data = filtered[
+        filtered["striker"].isin(selected_players)
+    ]
+
+    player_runs = (
+        player_data.groupby("striker")["runs_off_bat"]
+        .sum()
+    )
+
+    st.bar_chart(player_runs)
+else:
+    st.info("Select players from the sidebar to compare their runs.")
 
 st.divider()
-
-# Footer
-st.caption("IPL Cricket Data Analysis Project | Built using Python, Pandas and Streamlit")
+st.caption("IPL Cricket Data Analysis | Python • Pandas • Streamlit")
